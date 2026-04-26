@@ -53,22 +53,48 @@ class OpenClawBridge:
         results = self.manager.search(conversation_context, top_k=top_k)
         return results
     
+    @staticmethod
+    def _sanitize_memory_text(text: str, max_len: int = 500) -> str:
+        """
+        Sanitize memory text before injecting into system prompt.
+        Strips prompt-injection patterns (e.g. <system>, IGNORE PREVIOUS, etc.)
+        and enforces length limit.
+        """
+        # Truncate first
+        if len(text) > max_len:
+            text = text[:max_len] + "... [truncated]"
+
+        # Strip common prompt-injection patterns (case-insensitive)
+        injection_patterns = [
+            r'<\s*/?\s*system\s*>',
+            r'<\s*/?\s*human\s*>',
+            r'<\s*/?\s*assistant\s*>',
+            r'ignore\s+(all\s+)?previous\s+instructions?',
+            r'disregard\s+(all\s+)?previous\s+instructions?',
+            r'\[\s*INST\s*\]',
+            r'###\s*System',
+        ]
+        import re as _re
+        for pattern in injection_patterns:
+            text = _re.sub(pattern, '[filtered]', text, flags=_re.IGNORECASE)
+
+        return text
+
     def format_memories_for_prompt(self, memories: List[Dict]) -> str:
         """
         Format search results into a system prompt injection.
-        Ready to include in OpenClaw system message.
+        Sanitizes each memory to prevent prompt injection via stored text.
         """
         if not memories:
             return ""
-        
+
         lines = ["## Relevant Memories (from ClawMemory)\n"]
         for i, memory in enumerate(memories, 1):
+            clean_text = self._sanitize_memory_text(memory['text'])
             lines.append(f"### Memory {i} (relevance: {memory.get('similarity', 0):.2%})")
-            lines.append(memory['text'][:500])  # Truncate long memories
-            if len(memory['text']) > 500:
-                lines.append("... [truncated]")
+            lines.append(clean_text)
             lines.append("")
-        
+
         return "\n".join(lines)
     
     def get_memory_stats(self) -> Dict:

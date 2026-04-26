@@ -20,6 +20,9 @@ try:
 except ImportError:
     HAS_SENTENCE_TRANSFORMERS = False
 
+# Module-level model cache — load once, reuse across MemoryManager instances
+_MODEL_CACHE: dict = {}
+
 try:
     import numpy as np
     HAS_NUMPY = True
@@ -31,12 +34,15 @@ class EmbeddingEngine:
     """Convert text to vector embeddings using sentence-transformers."""
     
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        """Initialize embedding engine with specified model."""
+        """Initialize embedding engine with specified model. Uses module-level cache."""
         if not HAS_SENTENCE_TRANSFORMERS:
             raise ImportError("sentence-transformers required: pip install sentence-transformers")
-        
-        self.model = SentenceTransformer(model_name)
+
         self.model_name = model_name
+        if model_name not in _MODEL_CACHE:
+            _MODEL_CACHE[model_name] = SentenceTransformer(model_name)
+        self.model = _MODEL_CACHE[model_name]
+
         # Handle both old and new method names for compatibility
         if hasattr(self.model, 'get_embedding_dimension'):
             self.embedding_dim = self.model.get_embedding_dimension()
