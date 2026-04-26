@@ -40,7 +40,15 @@ def load_state() -> dict:
 
 
 def save_state(state: dict):
-    STATE_FILE.write_text(json.dumps(state, indent=2))
+    import fcntl
+    with open(STATE_FILE, "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        json.dump(state, f, indent=2)
+        fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def section_hash(text: str) -> str:
+    return hashlib.sha256(text.strip().encode()).hexdigest()[:16]
 
 
 def get_daily_files() -> list[Path]:
@@ -85,15 +93,23 @@ def main():
         content = f.read_text(encoding="utf-8")
         facts = extract_key_facts(content)
 
+        # Per-section dedup: only add new/changed sections
+        file_state = state.get(str(f), {}) if isinstance(state.get(str(f)), dict) else {}
         added = 0
+        new_file_state = {}
         for fact in facts:
+            sh = section_hash(fact)
+            heading = fact.split("\n")[0][:60]
+            new_file_state[heading] = sh
+            if file_state.get(heading) == sh:
+                continue  # unchanged section — skip
             try:
                 manager.add_memory(fact, metadata={"source": f.name, "flushed_at": datetime.now(timezone.utc).isoformat()})
                 added += 1
             except Exception as e:
                 log.error("Failed to add memory from %s: %s", f.name, e)
 
-        state[str(f)] = checksum
+        state[str(f)] = new_file_state
         total_added += added
         files_processed += 1
         log.info("DONE: %s — %d facts added", f.name, added)
