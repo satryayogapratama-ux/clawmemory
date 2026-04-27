@@ -1,5 +1,9 @@
 # ClawMemory: Semantic Memory for OpenClaw
 
+> **Status: Production · Self-hosted** — Actively used in production by the author. Open-source and available for deployment.
+
+![Status](https://img.shields.io/badge/Status-Production%20Self--hosted-brightgreen.svg)
+
 Unlimited memory storage with constant token cost. Store memories without growing context overhead.
 
 ## Problem
